@@ -1,11 +1,12 @@
 (ns blockly-games-by-clojurescript-reagent.core
   (:require
    [reagent.core :as reagent :refer [atom]]
-   [myexterns.jsapi]
-   [myexterns.blockly_compressed]
-   [myexterns.blocks_compressed]
-   [myexterns.javascript_compressed]
-   [myexterns.blockly_en]))
+;;   [myexterns.jsapi]
+;;   [myexterns.blockly_compressed]
+;;   [myexterns.blocks_compressed]
+;;   [myexterns.javascript_compressed]
+;;   [myexterns.blockly_en]
+   ))
 
 (enable-console-print!)
 
