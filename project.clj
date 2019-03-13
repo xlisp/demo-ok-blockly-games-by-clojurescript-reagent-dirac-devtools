@@ -38,6 +38,17 @@
                            :output-dir "resources/public/js/compiled/out"
                            :source-map-timestamp true
                            ;; To console.log CLJS data-structures make sure you enable devtools in Chrome
+                 :foreign-libs [{:file "resources/public/js/blockly_compressed.js"
+                                 :provides ["myexterns.blockly_compressed"]}
+                                {:file "resources/public/js/blocks_compressed.js"
+                                 :provides ["myexterns.blocks_compressed"]}
+                                {:file "resources/public/js/en.js"
+                                 :provides ["myexterns.blockly_en"]}
+                                {:file "resources/public/js/javascript_compressed.js"
+                                 :provides ["myexterns.javascript_compressed"]}
+                                {:file "resources/public/js/jsapi.js"
+                                 :provides ["myexterns.jsapi"]}
+                                ]
                            ;; https://github.com/binaryage/cljs-devtools
                            :preloads [devtools.preload]}}
                ;; This next build is a compressed minified build for
