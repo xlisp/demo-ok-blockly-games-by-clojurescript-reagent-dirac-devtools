@@ -21,7 +21,7 @@
 
 ;; define your app data so that it doesn't get over-written on reload
 
-(defonce app-state (atom {:text "Hello world!"}))
+(defonce app-state (atom {:text (str "Hello Blockly! " Blockly.Msg.ADD_COMMENT) }))
 
 
 (defn hello-world []
