@@ -33,24 +33,13 @@
                            :open-urls ["http://localhost:3449/index.html"]}
 
                 :compiler {:main blockly-games-by-clojurescript-reagent.core
+                           :libs ["src/blockly"]
+                           :externs ["svg.ext.js"]
                            :asset-path "js/compiled/out"
                            :output-to "resources/public/js/compiled/blockly_games_by_clojurescript_reagent.js"
                            :output-dir "resources/public/js/compiled/out"
                            :source-map-timestamp true
                            ;; To console.log CLJS data-structures make sure you enable devtools in Chrome
-                           :foreign-libs [{:file "resources/public/js/blockly_compressed.js"
-                                           :provides ["myexterns.blockly_compressed"]}
-                                          {:file "resources/public/js/blocks_compressed.js"
-                                           :provides ["myexterns.blocks_compressed"]}
-                                          {:file "resources/public/js/en.js"
-                                           :provides ["myexterns.blockly_en"]}
-                                          {:file "resources/public/js/javascript_compressed.js"
-                                           :provides ["myexterns.javascript_compressed"]}
-                                          {:file "resources/public/js/jsapi.js"
-                                           :provides ["myexterns.jsapi"]}
-                                          {:file "resources/public/js/autosize.min.js"
-                                           :provides ["myexterns.autosize"]}]
-                           :externs ["resources/public/js/autosize.ext.js"]
                            ;; https://github.com/binaryage/cljs-devtools
                            :preloads [devtools.preload]}}
                ;; This next build is a compressed minified build for

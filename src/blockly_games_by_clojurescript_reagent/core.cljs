@@ -1,12 +1,19 @@
 (ns blockly-games-by-clojurescript-reagent.core
   (:require
    [reagent.core :as reagent :refer [atom]]
-;;   [myexterns.jsapi]
-;;   [myexterns.blockly_compressed]
-;;   [myexterns.blocks_compressed]
-;;   [myexterns.javascript_compressed]
-;;   [myexterns.blockly_en]
+   [Blockly]
+   [Blockly.Blocks.loops]
+   [Blockly.Blocks.lists]
+   [Blockly.Blocks.texts]
+   [Blockly.Blocks.procedures]
+   [Blockly.Blocks.math]
+   [Blockly.Blocks.variables]
+   [Blockly.Blocks.colour]
+   [Blockly.Blocks.logic]
+   [Blockly.Msg.en]
    ))
+
+;;(js/autosize (.querySelector js/document "textarea"))
 
 (enable-console-print!)
 
