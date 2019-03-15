@@ -1,4 +1,4 @@
-# blockly-games-by-clojurescript-reagent
+# Demo: blockly games by clojurescript reagent
 
 FIXME: Write a one-line description of your library/project.
 
