@@ -24,18 +24,28 @@
  */
 'use strict';
 
+/**
+ * @name Blockly.Procedures
+ * @namespace
+ */
 goog.provide('Blockly.Procedures');
 
 goog.require('Blockly.Blocks');
+goog.require('Blockly.constants');
+goog.require('Blockly.Events.BlockChange');
 goog.require('Blockly.Field');
 goog.require('Blockly.Names');
 goog.require('Blockly.Workspace');
+goog.require('Blockly.Xml');
+goog.require('Blockly.Xml.utils');
 
 
 /**
- * Category to separate procedure names from variables and generated functions.
+ * Constant to separate procedure names from variables and generated functions
+ * when running generators.
+ * @deprecated Use Blockly.PROCEDURE_CATEGORY_NAME
  */
-Blockly.Procedures.NAME_TYPE = 'PROCEDURE';
+Blockly.Procedures.NAME_TYPE = Blockly.PROCEDURE_CATEGORY_NAME;
 
 /**
  * Find all user-created procedure definitions in a workspace.
@@ -46,7 +56,7 @@ Blockly.Procedures.NAME_TYPE = 'PROCEDURE';
  *     list, and return value boolean.
  */
 Blockly.Procedures.allProcedures = function(root) {
-  var blocks = root.getAllBlocks();
+  var blocks = root.getAllBlocks(false);
   var proceduresReturn = [];
   var proceduresNoReturn = [];
   for (var i = 0; i < blocks.length; i++) {
@@ -112,7 +122,19 @@ Blockly.Procedures.findLegalName = function(name, block) {
  * @private
  */
 Blockly.Procedures.isLegalName_ = function(name, workspace, opt_exclude) {
-  var blocks = workspace.getAllBlocks();
+  return !Blockly.Procedures.isNameUsed(name, workspace, opt_exclude);
+};
+
+/**
+ * Return if the given name is already a procedure name.
+ * @param {string} name The questionable name.
+ * @param {!Blockly.Workspace} workspace The workspace to scan for collisions.
+ * @param {Blockly.Block=} opt_exclude Optional block to exclude from
+ *     comparisons (one doesn't want to collide with oneself).
+ * @return {boolean} True if the name is used, otherwise return false.
+ */
+Blockly.Procedures.isNameUsed = function(name, workspace, opt_exclude) {
+  var blocks = workspace.getAllBlocks(false);
   // Iterate through every block and check the name.
   for (var i = 0; i < blocks.length; i++) {
     if (blocks[i] == opt_exclude) {
@@ -121,18 +143,18 @@ Blockly.Procedures.isLegalName_ = function(name, workspace, opt_exclude) {
     if (blocks[i].getProcedureDef) {
       var procName = blocks[i].getProcedureDef();
       if (Blockly.Names.equals(procName[0], name)) {
-        return false;
+        return true;
       }
     }
   }
-  return true;
+  return false;
 };
 
 /**
  * Rename a procedure.  Called by the editable field.
  * @param {string} name The proposed new name.
  * @return {string} The accepted name.
- * @this {!Blockly.Field}
+ * @this {Blockly.Field}
  */
 Blockly.Procedures.rename = function(name) {
   // Strip leading and trailing whitespace.  Beyond this, all names are legal.
@@ -143,7 +165,7 @@ Blockly.Procedures.rename = function(name) {
   var oldName = this.text_;
   if (oldName != name && oldName != legalName) {
     // Rename any callers.
-    var blocks = this.sourceBlock_.workspace.getAllBlocks();
+    var blocks = this.sourceBlock_.workspace.getAllBlocks(false);
     for (var i = 0; i < blocks.length; i++) {
       if (blocks[i].renameProcedure) {
         blocks[i].renameProcedure(oldName, legalName);
@@ -155,28 +177,42 @@ Blockly.Procedures.rename = function(name) {
 
 /**
  * Construct the blocks required by the flyout for the procedure category.
- * @param {!Blockly.Workspace} workspace The workspace contianing procedures.
+ * @param {!Blockly.Workspace} workspace The workspace containing procedures.
  * @return {!Array.<!Element>} Array of XML block elements.
  */
 Blockly.Procedures.flyoutCategory = function(workspace) {
   var xmlList = [];
   if (Blockly.Blocks['procedures_defnoreturn']) {
-    // <block type="procedures_defnoreturn" gap="16"></block>
-    var block = goog.dom.createDom('block');
+    // <block type="procedures_defnoreturn" gap="16">
+    //     <field name="NAME">do something</field>
+    // </block>
+    var block = Blockly.Xml.utils.createElement('block');
     block.setAttribute('type', 'procedures_defnoreturn');
     block.setAttribute('gap', 16);
+    var nameField = Blockly.Xml.utils.createElement('field');
+    nameField.setAttribute('name', 'NAME');
+    nameField.appendChild(Blockly.Xml.utils.createTextNode(
+        Blockly.Msg['PROCEDURES_DEFNORETURN_PROCEDURE']));
+    block.appendChild(nameField);
     xmlList.push(block);
   }
   if (Blockly.Blocks['procedures_defreturn']) {
-    // <block type="procedures_defreturn" gap="16"></block>
-    var block = goog.dom.createDom('block');
+    // <block type="procedures_defreturn" gap="16">
+    //     <field name="NAME">do something</field>
+    // </block>
+    var block = Blockly.Xml.utils.createElement('block');
     block.setAttribute('type', 'procedures_defreturn');
     block.setAttribute('gap', 16);
+    var nameField = Blockly.Xml.utils.createElement('field');
+    nameField.setAttribute('name', 'NAME');
+    nameField.appendChild(Blockly.Xml.utils.createTextNode(
+        Blockly.Msg['PROCEDURES_DEFRETURN_PROCEDURE']));
+    block.appendChild(nameField);
     xmlList.push(block);
   }
   if (Blockly.Blocks['procedures_ifreturn']) {
     // <block type="procedures_ifreturn" gap="16"></block>
-    var block = goog.dom.createDom('block');
+    var block = Blockly.Xml.utils.createElement('block');
     block.setAttribute('type', 'procedures_ifreturn');
     block.setAttribute('gap', 16);
     xmlList.push(block);
@@ -195,14 +231,14 @@ Blockly.Procedures.flyoutCategory = function(workspace) {
       //     <arg name="x"></arg>
       //   </mutation>
       // </block>
-      var block = goog.dom.createDom('block');
+      var block = Blockly.Xml.utils.createElement('block');
       block.setAttribute('type', templateName);
       block.setAttribute('gap', 16);
-      var mutation = goog.dom.createDom('mutation');
+      var mutation = Blockly.Xml.utils.createElement('mutation');
       mutation.setAttribute('name', name);
       block.appendChild(mutation);
       for (var j = 0; j < args.length; j++) {
-        var arg = goog.dom.createDom('arg');
+        var arg = Blockly.Xml.utils.createElement('arg');
         arg.setAttribute('name', args[j]);
         mutation.appendChild(arg);
       }
@@ -224,7 +260,7 @@ Blockly.Procedures.flyoutCategory = function(workspace) {
  */
 Blockly.Procedures.getCallers = function(name, workspace) {
   var callers = [];
-  var blocks = workspace.getAllBlocks();
+  var blocks = workspace.getAllBlocks(false);
   // Iterate through every block and check the name.
   for (var i = 0; i < blocks.length; i++) {
     if (blocks[i].getProcedureCall) {
@@ -259,7 +295,7 @@ Blockly.Procedures.mutateCallers = function(defBlock) {
       // undo action since it is deterministically tied to the procedure's
       // definition mutation.
       Blockly.Events.recordUndo = false;
-      Blockly.Events.fire(new Blockly.Events.Change(
+      Blockly.Events.fire(new Blockly.Events.BlockChange(
           caller, 'mutation', null, oldMutation, newMutation));
       Blockly.Events.recordUndo = oldRecordUndo;
     }

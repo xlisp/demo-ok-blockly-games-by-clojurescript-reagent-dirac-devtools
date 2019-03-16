@@ -27,6 +27,7 @@
 goog.provide('Blockly.FieldCheckbox');
 
 goog.require('Blockly.Field');
+goog.require('Blockly.utils');
 
 
 /**
@@ -45,6 +46,17 @@ Blockly.FieldCheckbox = function(state, opt_validator) {
   this.setValue(state);
 };
 goog.inherits(Blockly.FieldCheckbox, Blockly.Field);
+
+/**
+ * Construct a FieldCheckbox from a JSON arg object.
+ * @param {!Object} options A JSON object with options (checked).
+ * @returns {!Blockly.FieldCheckbox} The new field instance.
+ * @package
+ * @nocollapse
+ */
+Blockly.FieldCheckbox.fromJson = function(options) {
+  return new Blockly.FieldCheckbox(options['checked'] ? 'TRUE' : 'FALSE');
+};
 
 /**
  * Character for the checkmark.
@@ -67,7 +79,7 @@ Blockly.FieldCheckbox.prototype.init = function() {
   Blockly.FieldCheckbox.superClass_.init.call(this);
   // The checkbox doesn't use the inherited text element.
   // Instead it uses a custom checkmark element that is either visible or not.
-  this.checkElement_ = Blockly.createSvgElement('text',
+  this.checkElement_ = Blockly.utils.createSvgElement('text',
       {'class': 'blocklyText blocklyCheckbox', 'x': -3, 'y': 14},
       this.fieldGroup_);
   var textNode = document.createTextNode(Blockly.FieldCheckbox.CHECK_CHAR);
@@ -84,14 +96,16 @@ Blockly.FieldCheckbox.prototype.getValue = function() {
 };
 
 /**
- * Set the checkbox to be checked if strBool is 'TRUE', unchecks otherwise.
- * @param {string} strBool New state.
+ * Set the checkbox to be checked if newBool is 'TRUE' or true,
+ * unchecks otherwise.
+ * @param {string|boolean} newBool New state.
  */
-Blockly.FieldCheckbox.prototype.setValue = function(strBool) {
-  var newState = (strBool == 'TRUE');
+Blockly.FieldCheckbox.prototype.setValue = function(newBool) {
+  var newState = (typeof newBool == 'string') ?
+      (newBool.toUpperCase() == 'TRUE') : !!newBool;
   if (this.state_ !== newState) {
     if (this.sourceBlock_ && Blockly.Events.isEnabled()) {
-      Blockly.Events.fire(new Blockly.Events.Change(
+      Blockly.Events.fire(new Blockly.Events.BlockChange(
           this.sourceBlock_, 'field', this.name, this.state_, newState));
     }
     this.state_ = newState;
@@ -115,3 +129,5 @@ Blockly.FieldCheckbox.prototype.showEditor_ = function() {
     this.setValue(String(newState).toUpperCase());
   }
 };
+
+Blockly.Field.register('field_checkbox', Blockly.FieldCheckbox);

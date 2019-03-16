@@ -26,9 +26,13 @@
 
 goog.provide('Blockly.Toolbox');
 
+goog.require('Blockly.Events.Ui');
 goog.require('Blockly.Flyout');
-goog.require('goog.dom');
-goog.require('goog.dom.TagName');
+goog.require('Blockly.HorizontalFlyout');
+goog.require('Blockly.Touch');
+goog.require('Blockly.utils');
+goog.require('Blockly.VerticalFlyout');
+
 goog.require('goog.events');
 goog.require('goog.events.BrowserFeature');
 goog.require('goog.html.SafeHtml');
@@ -147,27 +151,32 @@ Blockly.Toolbox.prototype.init = function() {
   var workspace = this.workspace_;
   var svg = this.workspace_.getParentSvg();
 
-  // Create an HTML container for the Toolbox menu.
-  this.HtmlDiv =
-      goog.dom.createDom(goog.dom.TagName.DIV, 'blocklyToolboxDiv');
+  /**
+   * HTML container for the Toolbox menu.
+   * @type {Element}
+   */
+  this.HtmlDiv = document.createElement('div');
+  this.HtmlDiv.className = 'blocklyToolboxDiv';
   this.HtmlDiv.setAttribute('dir', workspace.RTL ? 'RTL' : 'LTR');
   svg.parentNode.insertBefore(this.HtmlDiv, svg);
 
   // Clicking on toolbox closes popups.
-  Blockly.bindEvent_(this.HtmlDiv, 'mousedown', this,
+  Blockly.bindEventWithChecks_(this.HtmlDiv, 'mousedown', this,
       function(e) {
-        if (Blockly.isRightButton(e) || e.target == this.HtmlDiv) {
+        if (Blockly.utils.isRightButton(e) || e.target == this.HtmlDiv) {
           // Close flyout.
           Blockly.hideChaff(false);
         } else {
           // Just close popups.
           Blockly.hideChaff(true);
         }
-      });
+        Blockly.Touch.clearTouchIdentifier();  // Don't block future drags.
+      }, /*opt_noCaptureIdentifier*/ false, /*opt_noPreventDefault*/ true);
   var workspaceOptions = {
     disabledPatternId: workspace.options.disabledPatternId,
     parentWorkspace: workspace,
     RTL: workspace.RTL,
+    oneBasedIndex: workspace.options.oneBasedIndex,
     horizontalLayout: workspace.horizontalLayout,
     toolboxPosition: workspace.options.toolboxPosition
   };
@@ -175,8 +184,15 @@ Blockly.Toolbox.prototype.init = function() {
    * @type {!Blockly.Flyout}
    * @private
    */
-  this.flyout_ = new Blockly.Flyout(workspaceOptions);
-  goog.dom.insertSiblingAfter(this.flyout_.createDom(), workspace.svgGroup_);
+  this.flyout_ = null;
+  if (workspace.horizontalLayout) {
+    this.flyout_ = new Blockly.HorizontalFlyout(workspaceOptions);
+  } else {
+    this.flyout_ = new Blockly.VerticalFlyout(workspaceOptions);
+  }
+  // Insert the flyout after the workspace.
+  Blockly.utils.insertAfter(this.flyout_.createDom('svg'),
+      this.workspace_.getParentSvg());
   this.flyout_.init(workspace);
 
   this.config_['cleardotPath'] = workspace.options.pathToMedia + '1x1.gif';
@@ -203,7 +219,7 @@ Blockly.Toolbox.prototype.init = function() {
 Blockly.Toolbox.prototype.dispose = function() {
   this.flyout_.dispose();
   this.tree_.dispose();
-  goog.dom.removeNode(this.HtmlDiv);
+  Blockly.utils.removeNode(this.HtmlDiv);
   this.workspace_ = null;
   this.lastCategory_ = null;
 };
@@ -234,7 +250,6 @@ Blockly.Toolbox.prototype.position = function() {
     return;
   }
   var svg = this.workspace_.getParentSvg();
-  var svgPosition = goog.style.getPageOffset(svg);
   var svgSize = Blockly.svgSize(svg);
   if (this.horizontalLayout_) {
     treeDiv.style.left = '0';
@@ -272,7 +287,8 @@ Blockly.Toolbox.prototype.populate_ = function(newTree) {
     this.syncTrees_(newTree, this.tree_, this.workspace_.options.pathToMedia);
 
   if (this.tree_.blocks.length) {
-    throw 'Toolbox cannot have both blocks and categories in the root level.';
+    throw Error('Toolbox cannot have both blocks and categories ' +
+        'in the root level.');
   }
 
   // Fire a resize event since the toolbox may have changed width and height.
@@ -283,8 +299,9 @@ Blockly.Toolbox.prototype.populate_ = function(newTree) {
 /**
  * Sync trees of the toolbox.
  * @param {!Node} treeIn DOM tree of blocks.
- * @param {!Blockly.Toolbox.TreeControl} treeOut
- * @param {string} pathToMedia
+ * @param {!Blockly.Toolbox.TreeControl} treeOut The TreeContorol object built
+ *     from treeIn.
+ * @param {string} pathToMedia The path to the Blockly media directory.
  * @return {Node} Tree node to open at startup (or null).
  * @private
  */
@@ -298,7 +315,11 @@ Blockly.Toolbox.prototype.syncTrees_ = function(treeIn, treeOut, pathToMedia) {
     }
     switch (childIn.tagName.toUpperCase()) {
       case 'CATEGORY':
-        var childOut = this.tree_.createNode(childIn.getAttribute('name'));
+        // Decode the category name for any potential message references
+        // (eg. `%{BKY_CATEGORY_NAME_LOGIC}`).
+        var categoryName = Blockly.utils.replaceMessageReferences(
+            childIn.getAttribute('name'));
+        var childOut = this.tree_.createNode(categoryName);
         childOut.blocks = [];
         treeOut.add(childOut);
         var custom = childIn.getAttribute('custom');
@@ -311,20 +332,25 @@ Blockly.Toolbox.prototype.syncTrees_ = function(treeIn, treeOut, pathToMedia) {
             openNode = newOpenNode;
           }
         }
+
+        var styleName = childIn.getAttribute('style');
         var colour = childIn.getAttribute('colour');
-        if (goog.isString(colour)) {
-          if (colour.match(/^#[0-9a-fA-F]{6}$/)) {
-            childOut.hexColour = colour;
-          } else {
-            childOut.hexColour = Blockly.hueToRgb(colour);
-          }
-          this.hasColours_ = true;
-        } else {
+
+        if (colour && styleName) {
           childOut.hexColour = '';
+          console.warn('Toolbox category "' + categoryName +
+            '" can not have both a style and a colour');
         }
+        else if (styleName) {
+          this.setColourFromStyle_(styleName, childOut, categoryName);
+        }
+        else {
+          this.setColour_(colour, childOut, categoryName);
+        }
+
         if (childIn.getAttribute('expanded') == 'true') {
           if (childOut.blocks.length) {
-            // This is a category that directly contians blocks.
+            // This is a category that directly contains blocks.
             // After the tree is rendered, open this category and show flyout.
             openNode = childOut;
           }
@@ -356,6 +382,8 @@ Blockly.Toolbox.prototype.syncTrees_ = function(treeIn, treeOut, pathToMedia) {
         break;
       case 'BLOCK':
       case 'SHADOW':
+      case 'LABEL':
+      case 'BUTTON':
         treeOut.blocks.push(childIn);
         lastElement = childIn;
         break;
@@ -365,14 +393,111 @@ Blockly.Toolbox.prototype.syncTrees_ = function(treeIn, treeOut, pathToMedia) {
 };
 
 /**
+ * Sets the colour on the category.
+ * @param {number|string} colourValue HSV hue value (0 to 360), #RRGGBB string,
+ *     or a message reference string pointing to one of those two values.
+ * @param {Blockly.Toolbox.TreeNode} childOut The child to set the hexColour on.
+ * @param {string} categoryName Name of the toolbox category.
+ * @private
+ */
+Blockly.Toolbox.prototype.setColour_ = function(colourValue, childOut, categoryName){
+  // Decode the colour for any potential message references
+  // (eg. `%{BKY_MATH_HUE}`).
+  var colour = Blockly.utils.replaceMessageReferences(colourValue);
+  if (colour === null || colour === '') {
+    // No attribute. No colour.
+    childOut.hexColour = '';
+  } else if (/^#[0-9a-fA-F]{6}$/.test(colour)) {
+    childOut.hexColour = colour;
+    this.hasColours_ = true;
+  } else if (typeof colour === 'number' ||
+      (typeof colour === 'string' && !isNaN(Number(colour)))) {
+    childOut.hexColour = Blockly.hueToRgb(Number(colour));
+    this.hasColours_ = true;
+  } else {
+    childOut.hexColour = '';
+    console.warn('Toolbox category "' + categoryName +
+        '" has unrecognized colour attribute: ' + colour);
+  }
+};
+
+/**
+ * Retrieves and sets the colour for the category using the style name.
+ * The category colour is set from the colour style attribute.
+ * @param {string} styleName Name of the style.
+ * @param {!Blockly.Toolbox.TreeNode} childOut The child to set the hexColour on.
+ * @param {string} categoryName Name of the toolbox category.
+ */
+Blockly.Toolbox.prototype.setColourFromStyle_ = function(
+    styleName, childOut, categoryName){
+  childOut.styleName = styleName;
+  if (styleName && Blockly.getTheme()) {
+    var style = Blockly.getTheme().getCategoryStyle(styleName);
+    if (style && style.colour) {
+      this.setColour_(style.colour, childOut, categoryName);
+    }
+    else {
+      console.warn('Style "' + styleName + '" must exist and contain a colour value');
+    }
+  }
+};
+
+/**
+ * Recursively updates all the category colours using the category style name.
+ * @param {Blockly.Toolbox.TreeNode=} opt_tree Starting point of tree.
+ *     Defaults to the root node.
+ * @private
+ */
+Blockly.Toolbox.prototype.updateColourFromTheme_ = function(opt_tree) {
+  var tree = opt_tree || this.tree_;
+  if (tree) {
+    var children = tree.getChildren(false);
+    for (var i = 0, child; child = children[i]; i++) {
+      if (child.styleName) {
+        this.setColourFromStyle_(child.styleName, child, '');
+        this.addColour_();
+      }
+      this.updateColourFromTheme_(child);
+    }
+  }
+};
+
+/**
+ * Updates the category colours and background colour of selected categories.
+ */
+Blockly.Toolbox.prototype.updateColourFromTheme = function() {
+  var tree = this.tree_;
+  if (tree) {
+    this.updateColourFromTheme_(tree);
+    this.updateSelectedItemColour_(tree);
+  }
+};
+
+/**
+ * Updates the background colour of the selected category.
+ * @param {!Blockly.Toolbox.TreeNode} tree Starting point of tree.
+ *     Defaults to the root node.
+ * @private
+ */
+Blockly.Toolbox.prototype.updateSelectedItemColour_ = function(tree) {
+  var selectedItem = tree.selectedItem_;
+  if (selectedItem) {
+    var hexColour = selectedItem.hexColour || '#57e';
+    selectedItem.getRowElement().style.backgroundColor = hexColour;
+    tree.toolbox_.addColour_(selectedItem);
+  }
+};
+
+
+/**
  * Recursively add colours to this toolbox.
- * @param {Blockly.Toolbox.TreeNode} opt_tree Starting point of tree.
+ * @param {Blockly.Toolbox.TreeNode=} opt_tree Starting point of tree.
  *     Defaults to the root node.
  * @private
  */
 Blockly.Toolbox.prototype.addColour_ = function(opt_tree) {
   var tree = opt_tree || this.tree_;
-  var children = tree.getChildren();
+  var children = tree.getChildren(false);
   for (var i = 0, child; child = children[i]; i++) {
     var element = child.getRowElement();
     if (element) {
@@ -396,6 +521,24 @@ Blockly.Toolbox.prototype.addColour_ = function(opt_tree) {
  */
 Blockly.Toolbox.prototype.clearSelection = function() {
   this.tree_.setSelectedItem(null);
+};
+
+/**
+ * Adds a style on the toolbox. Usually used to change the cursor.
+ * @param {string} style The name of the class to add.
+ * @package
+ */
+Blockly.Toolbox.prototype.addStyle = function(style) {
+  Blockly.utils.addClass(/** @type {!Element} */ (this.HtmlDiv), style);
+};
+
+/**
+ * Removes a style from the toolbox. Usually used to change the cursor.
+ * @param {string} style The name of the class to remove.
+ * @package
+ */
+Blockly.Toolbox.prototype.removeStyle = function(style) {
+  Blockly.utils.removeClass(/** @type {!Element} */ (this.HtmlDiv), style);
 };
 
 /**
@@ -448,7 +591,7 @@ Blockly.Toolbox.prototype.refreshSelection = function() {
 // Extending Closure's Tree UI.
 
 /**
- * Extention of a TreeControl object that uses a custom tree node.
+ * Extension of a TreeControl object that uses a custom tree node.
  * @param {Blockly.Toolbox} toolbox The parent toolbox for this tree.
  * @param {Object} config The configuration for the tree. See
  *    goog.ui.tree.TreeControl.DefaultConfig.
@@ -471,7 +614,7 @@ Blockly.Toolbox.TreeControl.prototype.enterDocument = function() {
   // Add touch handler.
   if (goog.events.BrowserFeature.TOUCH_ENABLED) {
     var el = this.getElement();
-    Blockly.bindEvent_(el, goog.events.EventType.TOUCHSTART, this,
+    Blockly.bindEventWithChecks_(el, goog.events.EventType.TOUCHEND, this,
         this.handleTouchEvent_);
   }
 };
@@ -482,13 +625,12 @@ Blockly.Toolbox.TreeControl.prototype.enterDocument = function() {
  * @private
  */
 Blockly.Toolbox.TreeControl.prototype.handleTouchEvent_ = function(e) {
-  e.preventDefault();
   var node = this.getNodeFromEvent_(e);
-  if (node && e.type === goog.events.EventType.TOUCHSTART) {
+  if (node && e.type === goog.events.EventType.TOUCHEND) {
     // Fire asynchronously since onMouseDown takes long enough that the browser
     // would fire the default mouse event before this method returns.
     setTimeout(function() {
-      node.onMouseDown(e);  // Same behaviour for click and touch.
+      node.onClick_(e);  // Same behaviour for click and touch.
     }, 1);
   }
 };
@@ -500,8 +642,9 @@ Blockly.Toolbox.TreeControl.prototype.handleTouchEvent_ = function(e) {
  * @override
  */
 Blockly.Toolbox.TreeControl.prototype.createNode = function(opt_html) {
-  return new Blockly.Toolbox.TreeNode(this.toolbox_, opt_html ?
-      goog.html.SafeHtml.htmlEscape(opt_html) : goog.html.SafeHtml.EMPTY,
+  var html = opt_html ?
+      goog.html.SafeHtml.htmlEscape(opt_html) : goog.html.SafeHtml.EMPTY;
+  return new Blockly.Toolbox.TreeNode(this.toolbox_, html,
       this.getConfig(), this.getDomHelper());
 };
 
@@ -562,7 +705,6 @@ Blockly.Toolbox.TreeControl.prototype.setSelectedItem = function(node) {
 Blockly.Toolbox.TreeNode = function(toolbox, html, opt_config, opt_domHelper) {
   goog.ui.tree.TreeNode.call(this, html, opt_config, opt_domHelper);
   if (toolbox) {
-    this.horizontalLayout_ = toolbox.horizontalLayout_;
     var resize = function() {
       // Even though the div hasn't changed size, the visible workspace
       // surface of the workspace has, so we may need to reposition everything.
@@ -578,7 +720,7 @@ Blockly.Toolbox.TreeNode = function(toolbox, html, opt_config, opt_domHelper) {
 goog.inherits(Blockly.Toolbox.TreeNode, goog.ui.tree.TreeNode);
 
 /**
- * Supress population of the +/- icon.
+ * Suppress population of the +/- icon.
  * @return {!goog.html.SafeHtml} The source for the icon.
  * @override
  */
@@ -588,10 +730,10 @@ Blockly.Toolbox.TreeNode.prototype.getExpandIconSafeHtml = function() {
 
 /**
  * Expand or collapse the node on mouse click.
- * @param {!goog.events.BrowserEvent} e The browser event.
+ * @param {!goog.events.BrowserEvent} _e The browser event.
  * @override
  */
-Blockly.Toolbox.TreeNode.prototype.onMouseDown = function(e) {
+Blockly.Toolbox.TreeNode.prototype.onClick_ = function(_e) {
   // Expand icon.
   if (this.hasChildren() && this.isUserCollapsible_) {
     this.toggle();
@@ -605,12 +747,22 @@ Blockly.Toolbox.TreeNode.prototype.onMouseDown = function(e) {
 };
 
 /**
- * Supress the inherited double-click behaviour.
- * @param {!goog.events.BrowserEvent} e The browser event.
+ * Suppress the inherited mouse down behaviour.
+ * @param {!goog.events.BrowserEvent} _e The browser event.
  * @override
  * @private
  */
-Blockly.Toolbox.TreeNode.prototype.onDoubleClick_ = function(e) {
+Blockly.Toolbox.TreeNode.prototype.onMouseDown = function(_e) {
+  // NOPE.
+};
+
+/**
+ * Suppress the inherited double-click behaviour.
+ * @param {!goog.events.BrowserEvent} _e The browser event.
+ * @override
+ * @private
+ */
+Blockly.Toolbox.TreeNode.prototype.onDoubleClick_ = function(_e) {
   // NOP.
 };
 
@@ -623,10 +775,12 @@ Blockly.Toolbox.TreeNode.prototype.onDoubleClick_ = function(e) {
  * @private
  */
 Blockly.Toolbox.TreeNode.prototype.onKeyDown = function(e) {
-  if (this.horizontalLayout_) {
+  if (this.tree.toolbox_.horizontalLayout_) {
     var map = {};
-    map[goog.events.KeyCodes.RIGHT] = goog.events.KeyCodes.DOWN;
-    map[goog.events.KeyCodes.LEFT] = goog.events.KeyCodes.UP;
+    var next = goog.events.KeyCodes.DOWN;
+    var prev = goog.events.KeyCodes.UP;
+    map[goog.events.KeyCodes.RIGHT] = this.rightToLeft_ ? prev : next;
+    map[goog.events.KeyCodes.LEFT] = this.rightToLeft_ ? next : prev;
     map[goog.events.KeyCodes.UP] = goog.events.KeyCodes.LEFT;
     map[goog.events.KeyCodes.DOWN] = goog.events.KeyCodes.RIGHT;
 
@@ -645,6 +799,6 @@ Blockly.Toolbox.TreeNode.prototype.onKeyDown = function(e) {
  * @extends {Blockly.Toolbox.TreeNode}
  */
 Blockly.Toolbox.TreeSeparator = function(config) {
-  Blockly.Toolbox.TreeNode.call(this, null, '', config);
+  Blockly.Toolbox.TreeNode.call(this, null, goog.html.SafeHtml.EMPTY, config);
 };
 goog.inherits(Blockly.Toolbox.TreeSeparator, Blockly.Toolbox.TreeNode);

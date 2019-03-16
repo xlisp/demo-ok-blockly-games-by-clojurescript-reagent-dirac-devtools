@@ -29,16 +29,28 @@
  */
 'use strict';
 
+/**
+ * @name Blockly.Tooltip
+ * @namespace
+ */
 goog.provide('Blockly.Tooltip');
 
+goog.require('Blockly.utils');
+
 goog.require('goog.dom');
-goog.require('goog.dom.TagName');
 
 
 /**
  * Is a tooltip currently showing?
  */
 Blockly.Tooltip.visible = false;
+
+/**
+ * Is someone else blocking the tooltip from being shown?
+ * @type {boolean}
+ * @private
+ */
+Blockly.Tooltip.blocked_ = false;
 
 /**
  * Maximum width (in characters) of a tooltip.
@@ -121,8 +133,8 @@ Blockly.Tooltip.createDom = function() {
     return;  // Already created.
   }
   // Create an HTML container for popup overlays (e.g. editor widgets).
-  Blockly.Tooltip.DIV =
-      goog.dom.createDom(goog.dom.TagName.DIV, 'blocklyTooltipDiv');
+  Blockly.Tooltip.DIV = document.createElement('div');
+  Blockly.Tooltip.DIV.className = 'blocklyTooltipDiv';
   document.body.appendChild(Blockly.Tooltip.DIV);
 };
 
@@ -131,9 +143,15 @@ Blockly.Tooltip.createDom = function() {
  * @param {!Element} element SVG element onto which tooltip is to be bound.
  */
 Blockly.Tooltip.bindMouseEvents = function(element) {
-  Blockly.bindEvent_(element, 'mouseover', null, Blockly.Tooltip.onMouseOver_);
-  Blockly.bindEvent_(element, 'mouseout', null, Blockly.Tooltip.onMouseOut_);
-  Blockly.bindEvent_(element, 'mousemove', null, Blockly.Tooltip.onMouseMove_);
+  Blockly.bindEvent_(element, 'mouseover', null,
+      Blockly.Tooltip.onMouseOver_);
+  Blockly.bindEvent_(element, 'mouseout', null,
+      Blockly.Tooltip.onMouseOut_);
+
+  // Don't use bindEvent_ for mousemove since that would create a
+  // corresponding touch handler, even though this only makes sense in the
+  // context of a mouseover/mouseout.
+  element.addEventListener('mousemove', Blockly.Tooltip.onMouseMove_, false);
 };
 
 /**
@@ -143,10 +161,15 @@ Blockly.Tooltip.bindMouseEvents = function(element) {
  * @private
  */
 Blockly.Tooltip.onMouseOver_ = function(e) {
+  if (Blockly.Tooltip.blocked_) {
+    // Someone doesn't want us to show tooltips.
+    return;
+  }
   // If the tooltip is an object, treat it as a pointer to the next object in
   // the chain to look at.  Terminate when a string or function is found.
   var element = e.target;
-  while (!goog.isString(element.tooltip) && !goog.isFunction(element.tooltip)) {
+  while ((typeof element.tooltip != 'string') &&
+         (typeof element.tooltip != 'function')) {
     element = element.tooltip;
   }
   if (Blockly.Tooltip.element_ != element) {
@@ -154,16 +177,20 @@ Blockly.Tooltip.onMouseOver_ = function(e) {
     Blockly.Tooltip.poisonedElement_ = null;
     Blockly.Tooltip.element_ = element;
   }
-  // Forget about any immediately preceeding mouseOut event.
+  // Forget about any immediately preceding mouseOut event.
   clearTimeout(Blockly.Tooltip.mouseOutPid_);
 };
 
 /**
  * Hide the tooltip if the mouse leaves the object and enters the workspace.
- * @param {!Event} e Mouse event.
+ * @param {!Event} _e Mouse event.
  * @private
  */
-Blockly.Tooltip.onMouseOut_ = function(e) {
+Blockly.Tooltip.onMouseOut_ = function(_e) {
+  if (Blockly.Tooltip.blocked_) {
+    // Someone doesn't want us to show tooltips.
+    return;
+  }
   // Moving from one element to another (overlapping or with no gap) generates
   // a mouseOut followed instantly by a mouseOver.  Fork off the mouseOut
   // event and kill it if a mouseOver is received immediately.
@@ -186,11 +213,12 @@ Blockly.Tooltip.onMouseMove_ = function(e) {
   if (!Blockly.Tooltip.element_ || !Blockly.Tooltip.element_.tooltip) {
     // No tooltip here to show.
     return;
-  } else if (Blockly.dragMode_ != Blockly.DRAG_NONE) {
-    // Don't display a tooltip during a drag.
-    return;
   } else if (Blockly.WidgetDiv.isVisible()) {
     // Don't display a tooltip if a widget is open (tooltip would be under it).
+    return;
+  } else if (Blockly.Tooltip.blocked_) {
+    // Someone doesn't want us to show tooltips.  We are probably handling a
+    // user gesture, such as a click or drag.
     return;
   }
   if (Blockly.Tooltip.visible) {
@@ -222,7 +250,28 @@ Blockly.Tooltip.hide = function() {
       Blockly.Tooltip.DIV.style.display = 'none';
     }
   }
-  clearTimeout(Blockly.Tooltip.showPid_);
+  if (Blockly.Tooltip.showPid_) {
+    clearTimeout(Blockly.Tooltip.showPid_);
+  }
+};
+
+/**
+ * Hide any in-progress tooltips and block showing new tooltips until the next
+ * call to unblock().
+ * @package
+ */
+Blockly.Tooltip.block = function() {
+  Blockly.Tooltip.hide();
+  Blockly.Tooltip.blocked_ = true;
+};
+
+/**
+ * Unblock tooltips: allow them to be scheduled and shown according to their own
+ * logic.
+ * @package
+ */
+Blockly.Tooltip.unblock = function() {
+  Blockly.Tooltip.blocked_ = false;
 };
 
 /**
@@ -230,15 +279,19 @@ Blockly.Tooltip.hide = function() {
  * @private
  */
 Blockly.Tooltip.show_ = function() {
+  if (Blockly.Tooltip.blocked_) {
+    // Someone doesn't want us to show tooltips.
+    return;
+  }
   Blockly.Tooltip.poisonedElement_ = Blockly.Tooltip.element_;
   if (!Blockly.Tooltip.DIV) {
     return;
   }
   // Erase all existing text.
-  goog.dom.removeChildren(/** @type {!Element} */ (Blockly.Tooltip.DIV));
+  Blockly.Tooltip.DIV.innerHTML = '';
   // Get the new text.
   var tip = Blockly.Tooltip.element_.tooltip;
-  while (goog.isFunction(tip)) {
+  while (typeof tip == 'function') {
     tip = tip();
   }
   tip = Blockly.utils.wrap(tip, Blockly.Tooltip.LIMIT);

@@ -27,14 +27,15 @@
 goog.provide('Blockly.FieldNumber');
 
 goog.require('Blockly.FieldTextInput');
-goog.require('goog.math');
+
 
 /**
  * Class for an editable number field.
- * @param {number|string} value The initial content of the field.
- * @param {number|string|undefined} opt_min Minimum value.
- * @param {number|string|undefined} opt_max Maximum value.
- * @param {number|string|undefined} opt_precision Precision for value.
+ * @param {(string|number)=} opt_value The initial content of the field.
+ *     The value should cast to a number, and if it does not, '0' will be used.
+ * @param {(string|number)=} opt_min Minimum value.
+ * @param {(string|number)=} opt_max Maximum value.
+ * @param {(string|number)=} opt_precision Precision for value.
  * @param {Function=} opt_validator An optional function that is called
  *     to validate any constraints on what the user entered.  Takes the new
  *     text as an argument and returns either the accepted text, a replacement
@@ -42,13 +43,27 @@ goog.require('goog.math');
  * @extends {Blockly.FieldTextInput}
  * @constructor
  */
-Blockly.FieldNumber =
-    function(value, opt_min, opt_max, opt_precision, opt_validator) {
-  value = String(value);
-  Blockly.FieldNumber.superClass_.constructor.call(this, value, opt_validator);
+Blockly.FieldNumber = function(opt_value, opt_min, opt_max, opt_precision,
+    opt_validator) {
+  opt_value = (opt_value && !isNaN(opt_value)) ? String(opt_value) : '0';
+  Blockly.FieldNumber.superClass_.constructor.call(
+      this, opt_value, opt_validator);
   this.setConstraints(opt_min, opt_max, opt_precision);
 };
 goog.inherits(Blockly.FieldNumber, Blockly.FieldTextInput);
+
+/**
+ * Construct a FieldNumber from a JSON arg object.
+ * @param {!Object} options A JSON object with options (value, min, max, and
+ *                          precision).
+ * @returns {!Blockly.FieldNumber} The new field instance.
+ * @package
+ * @nocollapse
+ */
+Blockly.FieldNumber.fromJson = function(options) {
+  return new Blockly.FieldNumber(options['value'],
+      options['min'], options['max'], options['precision']);
+};
 
 /**
  * Set the maximum, minimum and precision constraints on this field.
@@ -96,6 +111,8 @@ Blockly.FieldNumber.prototype.classValidator = function(text) {
     n = Math.round(n / this.precision_) * this.precision_;
   }
   // Get the value in range.
-  n = goog.math.clamp(n, this.min_, this.max_);
+  n = Math.min(Math.max(n, this.min_), this.max_);
   return String(n);
 };
+
+Blockly.Field.register('field_number', Blockly.FieldNumber);
