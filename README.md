@@ -1,39 +1,71 @@
-# Demo: blockly games by clojurescript reagent
 
-FIXME: Write a one-line description of your library/project.
+### Run dirac
 
-## Overview
+```bash
+./lein figwheel
+./lein repl
+```
 
-FIXME: Write a paragraph about the library/project and highlight its goals.
+### Emacs Cider connect
 
-## Setup
+```txt
+user> (dirac!)
+You can control Dirac REPL via special `dirac` command:
 
-To get an interactive development environment run:
+  `(dirac <action> [arg1] [arg2] [...])`
 
-    lein figwheel
+The argument `action` is a keyword followed by optional arguments.
 
-and open your browser at [localhost:3449](http://localhost:3449/).
-This will auto compile and send all changes to the browser without the
-need to reload. After the compilation process is complete, you will
-get a Browser Connected REPL. An easy way to try it is:
+List of supported actions:
 
-    (js/alert "Am I connected?")
+  `:status`     print current session state
+  `:ls`         list available sessions/compilers
 
-and you should see an alert in the browser window.
+  `:switch`     switch ClojureScript compiler
+  `:spawn`      start a new ClojureScript compiler
+  `:kill`       kill ClojureScript compiler
 
-To clean all compiled files:
+  `:join`       join a Dirac session
+  `:disjoin`    disjoin Dirac session
+  `:match`      list matching Dirac sessions
 
-    lein clean
+  `:fig`        Figwheel REPL API bridge
 
-To create a production build run:
+  `:version`    print version info
+  `:help`       print usage help
 
-    lein do clean, cljsbuild once min
+For more information use `(dirac :help <action>)`.
+Also note that outer-most parentheses are optional. You may also alternatively use `dirac!`.
+user> 
+user> 
+user> (dirac! :ls)
+Listing all Dirac sessions currently connected to your nREPL server:
+    #1 blockly-games-by-clojurescript-reagent | http://localhost:3449/index.html | Chrome/75.0.3759.0 | Mac/10.14.4 [7fe75a73]
 
-And open your browser in `resources/public/index.html`. You will not
-get live reloading, nor a REPL. 
-
-## License
-
-Copyright © 2014 FIXME
-
-Distributed under the Eclipse Public License either version 1.0 or (at your option) any later version.
+Listing all ClojureScript compilers currently available in your nREPL server:
+    #1 dirac/7fe75a73.1
+cljs.user> 
+cljs.user> (js/alert 321312)
+CompilerException java.lang.RuntimeException: No such namespace: js, compiling:(*cider-repl localhost*:84:11) 
+cljs.user> 
+cljs.user> 
+cljs.user> (dirac! :join 1)
+Specific target Dirac session will be determined dynamically according to current matching strategy.
+Your current nREPL session is a joined Dirac session (ClojureScript) which targets 'the Dirac session #1'
+which is currently forwarding commands to the Dirac session (ClojureScript) connected to 'blockly-games-by-clojurescript-reagent | http://localhost:3449/index.html | Chrome/75.0.3759.0 | Mac/10.14.4 [7fe75a73]'
+with selected ClojureScript compiler nil (any available) which is currently matching compiler <dirac/7fe75a73.1>.
+To quit, type: :cljs/quit
+cljs.user> (dirac! :join 1)
+Specific target Dirac session will be determined dynamically according to current matching strategy.
+Your current nREPL session is a joined Dirac session (ClojureScript) which targets 'the Dirac session #1'
+which is currently forwarding commands to the Dirac session (ClojureScript) connected to 'blockly-games-by-clojurescript-reagent | http://localhost:3449/index.html | Chrome/75.0.3759.0 | Mac/10.14.4 [7fe75a73]'
+with selected ClojureScript compiler nil (any available) which is currently matching compiler <dirac/7fe75a73.1>.
+To quit, type: :cljs/quit
+cljs.user> (js/alert 312321)
+nil
+cljs.user> ;; 上面的执行成功了
+cljs.user> (+ 1 2)
+3
+cljs.user> ;; 成功同步到了dirac的devtools上面了
+cljs.user> 
+```
