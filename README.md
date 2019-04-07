@@ -6,7 +6,7 @@
 ./lein repl
 ```
 
-### Emacs Cider connect
+### Emacs Cider connect: C-xC-e的第一次就会发送ns头过去,后面就不会了=> 所以需要暂时注释一些dirac devtool上面repl不过的东西(实际是可以引用的)
 
 ```txt
 user> (dirac!)
