@@ -1,3 +1,6 @@
+(def devtools-version "0.9.10")
+(def dirac-version "1.3.5")
+
 (defproject blockly-games-by-clojurescript-reagent "0.1.0-SNAPSHOT"
   :description "FIXME: write this!"
   :url "http://example.com/FIXME"
@@ -11,8 +14,10 @@
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.clojure/clojurescript "1.10.238"]
                  [org.clojure/core.async  "0.4.474"]
-                 [reagent "0.7.0"]]
-
+                 [reagent "0.7.0"]
+                 [binaryage/devtools ~devtools-version]
+                 [binaryage/dirac ~dirac-version]]
+  
   :plugins [[lein-figwheel "0.5.16"]
             [lein-cljsbuild "1.1.7" :exclusions [[org.clojure/clojure]]]]
 
@@ -55,7 +60,7 @@
   :figwheel {;; :http-server-root "public" ;; default and assumes "resources"
              ;; :server-port 3449 ;; default
              ;; :server-ip "127.0.0.1"
-
+             
              :css-dirs ["resources/public/css"] ;; watch and update CSS
 
              ;; Start an nREPL server into the running figwheel process
@@ -100,9 +105,13 @@
                                   [cider/piggieback "0.3.1"]]
                    ;; need to add dev source path here to get user.clj loaded
                    :source-paths ["src" "dev"]
-                   ;; for CIDER
-                   ;; :plugins [[cider/cider-nrepl "0.12.0"]]
-                   :repl-options {:nrepl-middleware [cider.piggieback/wrap-cljs-repl]}
+
+                   :repl-options {:port             8230
+                                  :nrepl-middleware [dirac.nrepl/middleware]
+                                  :init             (do
+                                                      (require 'dirac.agent)
+                                                      (dirac.agent/boot!))}
+                   
                    ;; need to add the compliled assets to the :clean-targets
                    :clean-targets ^{:protect false} ["resources/public/js/compiled"
                                                      :target-path]}})

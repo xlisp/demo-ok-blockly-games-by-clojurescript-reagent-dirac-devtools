@@ -1,5 +1,6 @@
 (ns blockly-games-by-clojurescript-reagent.core
   (:require
+   [dirac.runtime]
    [reagent.core :as reagent :refer [atom]]
    [Blockly]
    [Blockly.Blocks.loops]
@@ -10,12 +11,13 @@
    [Blockly.Blocks.variables]
    [Blockly.Blocks.colour]
    [Blockly.Blocks.logic]
-   [Blockly.Msg.en]
-   ))
+   [Blockly.Msg.en]))
 
 ;;(js/autosize (.querySelector js/document "textarea"))
 
 (enable-console-print!)
+
+(dirac.runtime/install!)
 
 (println "This text is printed from src/blockly-games-by-clojurescript-reagent/core.cljs. Go ahead and edit it and see reloading in action.")
 
